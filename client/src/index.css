@@ -1,0 +1,240 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  /* 主色：石板蓝 — 专业、沉稳、适合长时间阅读 */
+  --primary: oklch(0.42 0.09 240);
+  --primary-foreground: oklch(0.98 0 0);
+
+  /* 背景：暖米白 — 不刺眼，接近纸张质感 */
+  --background: oklch(0.975 0.006 80);
+  --foreground: oklch(0.22 0.015 240);
+
+  /* 卡片：纯白带微暖 */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.015 240);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.015 240);
+
+  /* 次要色：浅石板蓝 */
+  --secondary: oklch(0.94 0.018 240);
+  --secondary-foreground: oklch(0.35 0.07 240);
+
+  /* 静音色：暖灰 */
+  --muted: oklch(0.94 0.006 80);
+  --muted-foreground: oklch(0.55 0.02 240);
+
+  /* 强调色：淡蓝 */
+  --accent: oklch(0.93 0.025 240);
+  --accent-foreground: oklch(0.35 0.07 240);
+
+  /* 危险色 */
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  /* 边框：极淡暖灰 */
+  --border: oklch(0.88 0.01 240);
+  --input: oklch(0.88 0.01 240);
+  --ring: oklch(0.42 0.09 240);
+
+  /* 图表色 */
+  --chart-1: oklch(0.55 0.12 240);
+  --chart-2: oklch(0.62 0.14 180);
+  --chart-3: oklch(0.68 0.13 140);
+  --chart-4: oklch(0.72 0.12 60);
+  --chart-5: oklch(0.65 0.15 300);
+
+  /* 圆角：适中，不过于圆润 */
+  --radius: 0.5rem;
+
+  /* 侧边栏 */
+  --sidebar: oklch(0.97 0.006 240);
+  --sidebar-foreground: oklch(0.22 0.015 240);
+  --sidebar-primary: oklch(0.42 0.09 240);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.93 0.025 240);
+  --sidebar-accent-foreground: oklch(0.35 0.07 240);
+  --sidebar-border: oklch(0.88 0.01 240);
+  --sidebar-ring: oklch(0.42 0.09 240);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "kern" 1, "liga" 1;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+      max-width: 1280px;
+    }
+  }
+
+  /* 教学设计专用样式 */
+  .td-card {
+    @apply bg-card rounded-xl border border-border shadow-sm;
+    box-shadow: 0 1px 3px oklch(0.22 0.015 240 / 0.06), 0 1px 2px oklch(0.22 0.015 240 / 0.04);
+  }
+
+  .td-card-confirmed {
+    @apply border-emerald-200 bg-emerald-50/40;
+    box-shadow: 0 1px 3px oklch(0.5 0.15 160 / 0.08);
+  }
+
+  .td-section-label {
+    @apply text-xs font-semibold tracking-widest uppercase text-muted-foreground/70;
+    letter-spacing: 0.1em;
+  }
+
+  .td-pill-btn {
+    @apply px-4 py-1.5 rounded-full text-sm font-medium border transition-all duration-200;
+  }
+
+  .td-pill-btn-active {
+    @apply bg-primary text-primary-foreground border-primary shadow-sm;
+  }
+
+  .td-pill-btn-inactive {
+    @apply bg-card text-foreground border-border hover:border-primary/40 hover:bg-primary/5;
+  }
+
+  /* 上传区域 */
+  .td-upload-zone {
+    @apply border-2 border-dashed border-border rounded-xl p-8 text-center transition-all duration-200;
+  }
+
+  .td-upload-zone:hover,
+  .td-upload-zone.dragging {
+    @apply border-primary/50 bg-primary/3;
+  }
+
+  /* 字段标签 */
+  .td-field-label {
+    @apply text-xs font-semibold text-slate-500 mb-1.5 block;
+    letter-spacing: 0.04em;
+  }
+
+  /* 输入框基础样式增强 */
+  input.td-input, textarea.td-input {
+    @apply bg-white/80 border-border/70 focus:border-primary/60 focus:ring-primary/20 rounded-lg;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  /* 节点卡片 */
+  .td-node-card {
+    @apply bg-white rounded-lg border border-border/80 transition-all duration-200;
+    box-shadow: 0 1px 2px oklch(0.22 0.015 240 / 0.05);
+  }
+
+  .td-node-card:hover {
+    box-shadow: 0 2px 8px oklch(0.22 0.015 240 / 0.1);
+    @apply border-primary/30;
+  }
+
+  /* 确认状态条纹背景 */
+  .td-confirmed-stripe {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 8px,
+      oklch(0.5 0.15 160 / 0.04) 8px,
+      oklch(0.5 0.15 160 / 0.04) 16px
+    );
+  }
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.75 0.02 240);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.6 0.05 240);
+}
