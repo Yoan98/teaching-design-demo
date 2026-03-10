@@ -2,12 +2,13 @@
 // 设计哲学：让老师「看见」路径节奏，而非阅读理论说明
 // 卡片设计：阶段气泡流 + 节奏标签 + 展开说明
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, ArrowRight, Check, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useAppStore, PRESET_MODELS, type Model, generateSampleData } from '@/lib/store';
+import { generatePathByLLM, recommendModelByLLM } from '@/lib/ai-service';
 
 const RHYTHM_COLORS: Record<string, { bg: string; text: string }> = {
   '前慢后快': { bg: 'bg-amber-50', text: 'text-amber-700' },
@@ -123,17 +124,63 @@ function ModelCard({ model, isSelected, onSelect }: {
 
 export default function Step2Model() {
   const { selectedModel, selectModel, setStep, context, setPathInstance } = useAppStore();
+  const [recommendedIds, setRecommendedIds] = useState<string[]>([]);
+  const [recommendReason, setRecommendReason] = useState('');
+  const [loadingRecommend, setLoadingRecommend] = useState(false);
+  const [generatingPath, setGeneratingPath] = useState(false);
 
-  const handleConfirm = () => {
+  useEffect(() => {
+    const canRecommend = context.topic && context.coreQuestion && context.courseType;
+    if (!canRecommend) return;
+
+    const run = async () => {
+      setLoadingRecommend(true);
+      try {
+        const result = await recommendModelByLLM(context, PRESET_MODELS);
+        setRecommendedIds(result.rankedModelIds);
+        setRecommendReason(result.reason);
+      } catch {
+        // 推荐失败不阻断流程
+      } finally {
+        setLoadingRecommend(false);
+      }
+    };
+
+    void run();
+  }, [context]);
+
+  const orderedModels = useMemo(() => {
+    if (recommendedIds.length === 0) return PRESET_MODELS;
+    const rank = new Map(recommendedIds.map((id, idx) => [id, idx]));
+    return [...PRESET_MODELS].sort((a, b) => {
+      const ra = rank.has(a.modelId) ? (rank.get(a.modelId) as number) : Number.MAX_SAFE_INTEGER;
+      const rb = rank.has(b.modelId) ? (rank.get(b.modelId) as number) : Number.MAX_SAFE_INTEGER;
+      return ra - rb;
+    });
+  }, [recommendedIds]);
+
+  const handleConfirm = async () => {
     if (!selectedModel) { toast.error('请先选择一个认知路径模型'); return; }
-    const pi = generateSampleData(
-      selectedModel.modelId,
-      selectedModel.stages,
-      context.duration || 40
-    );
-    setPathInstance(pi);
-    toast.success(`已选择「${selectedModel.modelName}」`);
-    setTimeout(() => setStep(3), 400);
+
+    setGeneratingPath(true);
+    try {
+      const pi = await generatePathByLLM(context, selectedModel);
+      setPathInstance(pi);
+      toast.success(`已生成「${selectedModel.modelName}」路径实例`);
+      setStep(3);
+    } catch (error) {
+      const fallback = generateSampleData(
+        selectedModel.modelId,
+        selectedModel.stages,
+        context.duration || 40
+      );
+      setPathInstance(fallback);
+      const msg = error instanceof Error ? error.message : 'AI 生成失败';
+      toast.warning(`AI 生成失败，已回退示例数据：${msg}`);
+      setStep(3);
+    } finally {
+      setGeneratingPath(false);
+    }
   };
 
   return (
@@ -175,9 +222,20 @@ export default function Step2Model() {
           )}
         </div>
 
+        {/* 推荐提示 */}
+        {(recommendReason || loadingRecommend) && (
+          <div className="mb-4 rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-2.5">
+            <p className="text-xs text-muted-foreground">
+              {loadingRecommend
+                ? 'AI 正在根据课程信息排序推荐模型...'
+                : `AI 推荐：${recommendReason}`}
+            </p>
+          </div>
+        )}
+
         {/* 模型卡片 */}
         <div className="space-y-3">
-          {PRESET_MODELS.map((model) => (
+          {orderedModels.map((model) => (
             <ModelCard
               key={model.modelId}
               model={model}
@@ -199,11 +257,15 @@ export default function Step2Model() {
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!selectedModel}
+            disabled={!selectedModel || generatingPath}
             className="gap-2 px-6"
             style={selectedModel ? { background: 'oklch(0.42 0.09 240)' } : {}}
           >
-            {selectedModel ? `使用「${selectedModel.modelName}」` : '请先选择模型'}
+            {generatingPath
+              ? '正在生成路径...'
+              : selectedModel
+                ? `使用「${selectedModel.modelName}」`
+                : '请先选择模型'}
             <ChevronRight size={16} />
           </Button>
         </div>

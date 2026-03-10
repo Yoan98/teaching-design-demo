@@ -9,11 +9,13 @@ import {
   LayoutList, GitBranch, Clock, RotateCcw, BookOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import {
   useAppStore, getTotalTime, getNodeTypeColor, getNodeTotalActivityTime,
   getLogicRelationColor
 } from '@/lib/store';
+import { summarizePlanByLLM } from '@/lib/ai-service';
 
 // 阶段颜色
 const STAGE_COLORS = [
@@ -259,7 +261,16 @@ function useValidation() {
 export default function Step5Preview() {
   const [view, setView] = useState<'path' | 'table'>('path');
   const [published, setPublished] = useState(false);
-  const { setStep, context, pathInstance, selectedModel, setPathStatus } = useAppStore();
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const {
+    setStep,
+    context,
+    pathInstance,
+    selectedModel,
+    setPathStatus,
+    setPathExecutionMeta,
+    setPlanSummary,
+  } = useAppStore();
   const errors = useValidation();
 
   const handlePublish = () => {
@@ -267,9 +278,42 @@ export default function Step5Preview() {
       toast.error('发布前请修复：' + errors[0]);
       return;
     }
-    setPathStatus('发布');
-    setPublished(true);
-    toast.success('教学设计已发布！');
+    if (pathInstance.status === '草稿') {
+      setPathStatus('确认');
+      toast.success('状态已更新为「确认」');
+      return;
+    }
+    if (pathInstance.status === '确认') {
+      setPathStatus('发布');
+      setPublished(true);
+      toast.success('教学设计已发布！');
+      return;
+    }
+    if (pathInstance.status === '发布') {
+      setPathStatus('已使用');
+      toast.success('状态已更新为「已使用」');
+      return;
+    }
+    if (pathInstance.status === '已使用') {
+      setPathStatus('已归档');
+      toast.success('状态已更新为「已归档」');
+      return;
+    }
+    toast.info('当前已归档，可返回新建教学设计');
+  };
+
+  const handleSummarize = async () => {
+    setSummaryLoading(true);
+    try {
+      const summary = await summarizePlanByLLM(context, pathInstance);
+      setPlanSummary(summary);
+      toast.success('AI 摘要已生成');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '摘要生成失败';
+      toast.error(msg);
+    } finally {
+      setSummaryLoading(false);
+    }
   };
 
   // 发布成功页
@@ -389,6 +433,44 @@ export default function Step5Preview() {
           </div>
         )}
 
+        {/* 状态与摘要 */}
+        <div className="mb-5 space-y-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-muted-foreground">当前状态</span>
+            <span className="text-xs px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+              {pathInstance.status}
+            </span>
+            <Button size="sm" variant="outline" onClick={handleSummarize} disabled={summaryLoading} className="h-7 text-xs">
+              {summaryLoading ? '摘要生成中...' : 'AI 生成摘要'}
+            </Button>
+          </div>
+
+          {pathInstance.planSummary && (
+            <div className="rounded-xl border border-border/70 bg-white p-3">
+              <p className="text-xs text-muted-foreground mb-1">AI 教案摘要</p>
+              <p className="text-sm leading-relaxed text-foreground">{pathInstance.planSummary}</p>
+            </div>
+          )}
+
+          {pathInstance.status === '已使用' && (
+            <div className="rounded-xl border border-border/70 bg-white p-3 space-y-2">
+              <p className="text-xs text-muted-foreground">课堂执行反馈</p>
+              <Textarea
+                value={pathInstance.executionNotes}
+                onChange={(e) => setPathExecutionMeta({ executionNotes: e.target.value })}
+                placeholder="填写课后执行备注..."
+                className="min-h-[80px] text-sm"
+              />
+              <input
+                value={pathInstance.revisionTrigger}
+                onChange={(e) => setPathExecutionMeta({ revisionTrigger: e.target.value })}
+                placeholder="修订触发原因（可选）"
+                className="w-full h-8 rounded-md border border-border/70 bg-background px-3 text-xs"
+              />
+            </div>
+          )}
+        </div>
+
         {/* 视图切换 */}
         <div className="flex items-center gap-1 mb-5 bg-muted/50 rounded-lg p-1 w-fit">
           <button
@@ -426,12 +508,16 @@ export default function Step5Preview() {
           </Button>
           <Button
             onClick={handlePublish}
-            disabled={errors.length > 0}
+            disabled={errors.length > 0 || pathInstance.status === '已归档'}
             className="gap-2 px-6"
             style={errors.length === 0 ? { background: 'oklch(0.42 0.09 240)' } : {}}
           >
             <Send size={15} />
-            确认发布
+            {pathInstance.status === '草稿' && '确认结构'}
+            {pathInstance.status === '确认' && '确认发布'}
+            {pathInstance.status === '发布' && '标记已使用'}
+            {pathInstance.status === '已使用' && '归档设计'}
+            {pathInstance.status === '已归档' && '已归档'}
           </Button>
         </div>
       </div>

@@ -20,6 +20,7 @@ import {
   useAppStore, getNodeTypeColor, getNodeTotalActivityTime,
   type Node, type Activity
 } from '@/lib/store';
+import { generateActivitiesByLLM } from '@/lib/ai-service';
 
 const ACTIVITY_TYPES = [
   '操作实验', '讨论表达', '阅读理解', '参数测试',
@@ -33,10 +34,19 @@ const TOOL_OPTIONS = [
 const DELIVERABLE_TYPES = ['代码', '图片', '网址', '文本', '选择结果', '音频', '视频'];
 const EVALUATION_MODES = ['自动检测', '规则检测', '人工评价', '同伴互评'];
 
+function withCurrentOption(options: string[], current: string): string[] {
+  if (!current?.trim()) return options;
+  return options.includes(current) ? options : [current, ...options];
+}
+
 // 活动卡片
 function ActivityCard({ activity }: { activity: Activity }) {
-  const { updateActivity, deleteActivity } = useAppStore();
+  const { updateActivity, deleteActivity, saveActivityAsTemplate } = useAppStore();
   const { panelState, openPanel } = useAiPanel();
+  const activityTypeOptions = withCurrentOption(ACTIVITY_TYPES, activity.activityType);
+  const toolOptions = withCurrentOption(TOOL_OPTIONS, activity.toolRequired);
+  const deliverableOptions = withCurrentOption(DELIVERABLE_TYPES, activity.deliverableType);
+  const evaluationModeOptions = withCurrentOption(EVALUATION_MODES, activity.evaluationMode);
 
   const handleCopy = () => {
     const newAct: Activity = {
@@ -77,7 +87,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {ACTIVITY_TYPES.map(t => (
+            {activityTypeOptions.map(t => (
               <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
             ))}
           </SelectContent>
@@ -119,6 +129,12 @@ function ActivityCard({ activity }: { activity: Activity }) {
         </div>
       </div>
 
+      {activity.templateId && (
+        <div className="mb-2 text-[11px] text-primary bg-primary/8 border border-primary/20 inline-flex px-2 py-0.5 rounded-full">
+          模板来源：{activity.templateId}
+        </div>
+      )}
+
       {/* 任务描述 */}
       <Textarea
         value={activity.taskDescription}
@@ -139,7 +155,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {TOOL_OPTIONS.map(t => (
+              {toolOptions.map(t => (
                 <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
               ))}
             </SelectContent>
@@ -155,7 +171,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {DELIVERABLE_TYPES.map(t => (
+              {deliverableOptions.map(t => (
                 <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
               ))}
             </SelectContent>
@@ -171,7 +187,7 @@ function ActivityCard({ activity }: { activity: Activity }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {EVALUATION_MODES.map(t => (
+              {evaluationModeOptions.map(t => (
                 <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
               ))}
             </SelectContent>
@@ -185,18 +201,140 @@ function ActivityCard({ activity }: { activity: Activity }) {
         placeholder="评价标准（可选）..."
         className="text-xs h-7 bg-white/80 border-border/60"
       />
+
+      <div className="mt-3 border border-border/60 rounded-lg p-2.5 bg-white/70">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-medium text-foreground">行为序列（behaviorSequence）</p>
+          <button
+            onClick={() => {
+              updateActivity(activity.activityId, {
+                behaviorSequence: [
+                  ...activity.behaviorSequence,
+                  {
+                    behaviorType: '',
+                    behaviorTarget: '',
+                    behaviorTool: '',
+                    behaviorOutput: '',
+                    estimatedTime: 1,
+                  },
+                ],
+              });
+            }}
+            className="text-xs text-primary hover:underline"
+          >
+            + 新增步骤
+          </button>
+        </div>
+
+        {activity.behaviorSequence.length === 0 ? (
+          <p className="text-xs text-muted-foreground">当前无行为序列，点击“新增步骤”可添加。</p>
+        ) : (
+          <div className="space-y-2">
+            {activity.behaviorSequence.map((behavior, index) => (
+              <div key={`${activity.activityId}-behavior-${index}`} className="grid grid-cols-[1fr_1fr_1fr_1fr_72px_24px] gap-1.5 items-center">
+                <Input
+                  value={behavior.behaviorType}
+                  onChange={(e) => {
+                    const next = activity.behaviorSequence.map((item, i) =>
+                      i === index ? { ...item, behaviorType: e.target.value } : item
+                    );
+                    updateActivity(activity.activityId, { behaviorSequence: next });
+                  }}
+                  placeholder="行为类型"
+                  className="h-7 text-xs"
+                />
+                <Input
+                  value={behavior.behaviorTarget}
+                  onChange={(e) => {
+                    const next = activity.behaviorSequence.map((item, i) =>
+                      i === index ? { ...item, behaviorTarget: e.target.value } : item
+                    );
+                    updateActivity(activity.activityId, { behaviorSequence: next });
+                  }}
+                  placeholder="行为对象"
+                  className="h-7 text-xs"
+                />
+                <Input
+                  value={behavior.behaviorTool}
+                  onChange={(e) => {
+                    const next = activity.behaviorSequence.map((item, i) =>
+                      i === index ? { ...item, behaviorTool: e.target.value } : item
+                    );
+                    updateActivity(activity.activityId, { behaviorSequence: next });
+                  }}
+                  placeholder="使用工具"
+                  className="h-7 text-xs"
+                />
+                <Input
+                  value={behavior.behaviorOutput}
+                  onChange={(e) => {
+                    const next = activity.behaviorSequence.map((item, i) =>
+                      i === index ? { ...item, behaviorOutput: e.target.value } : item
+                    );
+                    updateActivity(activity.activityId, { behaviorSequence: next });
+                  }}
+                  placeholder="行为产出"
+                  className="h-7 text-xs"
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={behavior.estimatedTime}
+                  onChange={(e) => {
+                    const next = activity.behaviorSequence.map((item, i) =>
+                      i === index ? { ...item, estimatedTime: Math.max(1, parseInt(e.target.value, 10) || 1) } : item
+                    );
+                    updateActivity(activity.activityId, { behaviorSequence: next });
+                  }}
+                  placeholder="分钟"
+                  className="h-7 text-xs"
+                />
+                <button
+                  onClick={() => {
+                    const next = activity.behaviorSequence.filter((_, i) => i !== index);
+                    updateActivity(activity.activityId, { behaviorSequence: next });
+                  }}
+                  className="text-muted-foreground hover:text-red-500"
+                  title="删除该步骤"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2.5 flex justify-end">
+        <button
+          onClick={() => {
+            const name = window.prompt('输入模板名称');
+            if (!name?.trim()) return;
+            saveActivityAsTemplate(activity.activityId, name.trim());
+            toast.success('已保存为模板');
+          }}
+          className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted transition-colors"
+        >
+          另存为模板
+        </button>
+      </div>
     </motion.div>
   );
 }
 
 // 节点展开区域
 function NodeSection({ node, stageLabel }: { node: Node; stageLabel?: string }) {
-  const { toggleNodeExpanded, addActivity } = useAppStore();
+  const { toggleNodeExpanded, addActivity, applyActivityTemplateToNode, setNodeActivities, activityTemplates, context } = useAppStore();
   const { panelState, openPanel } = useAiPanel();
+  const [generating, setGenerating] = useState(false);
   const activityTime = getNodeTotalActivityTime(node);
   const isOver = activityTime > node.estimatedTime;
   const overBy = activityTime - node.estimatedTime;
   const isEmpty = node.activities.length === 0;
+  const availableTemplates = activityTemplates.filter((tpl) =>
+    tpl.applicableNodeTypes.includes(node.nodeType)
+  );
 
   return (
     <div className={`
@@ -280,6 +418,46 @@ function NodeSection({ node, stageLabel }: { node: Node; stageLabel?: string }) 
                   <ActivityCard key={activity.activityId} activity={activity} />
                 ))}
               </AnimatePresence>
+
+              {/* 模板与 AI 生成 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {availableTemplates.slice(0, 3).map((tpl) => (
+                  <button
+                    key={tpl.templateId}
+                    onClick={() => {
+                      applyActivityTemplateToNode(node.nodeId, tpl.templateId);
+                      toast.success(`已套用模板：${tpl.templateName}`);
+                    }}
+                    className="text-xs px-2.5 py-1 rounded-full border border-border/60 bg-white hover:bg-muted/40 transition-colors"
+                  >
+                    套用模板：{tpl.templateName}
+                  </button>
+                ))}
+                <button
+                  disabled={generating}
+                  onClick={async () => {
+                    setGenerating(true);
+                    try {
+                      const generated = await generateActivitiesByLLM({
+                        context,
+                        node,
+                        templates: activityTemplates,
+                        count: 1,
+                      });
+                      setNodeActivities(node.nodeId, [...node.activities, ...generated]);
+                      toast.success('AI 已生成活动');
+                    } catch (error) {
+                      const msg = error instanceof Error ? error.message : 'AI 生成失败';
+                      toast.error(msg);
+                    } finally {
+                      setGenerating(false);
+                    }
+                  }}
+                  className="text-xs px-2.5 py-1 rounded-full border border-primary/30 text-primary bg-primary/8 hover:bg-primary/12 transition-colors disabled:opacity-50"
+                >
+                  {generating ? 'AI 生成中...' : 'AI 生成活动'}
+                </button>
+              </div>
 
               {/* 新增活动 */}
               <button
