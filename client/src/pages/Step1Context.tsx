@@ -17,10 +17,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { useAppStore, type Duration, type CourseType, type StudentGrade } from '@/lib/store';
+import {
+  useAppStore,
+  type Duration,
+  type CourseType,
+  type StudentGrade,
+  type StudentLevel,
+} from '@/lib/store';
+import { parseTeachingFile } from '@/lib/file-parser';
+import { extractContextByLLM } from '@/lib/ai-service';
 
 const DURATIONS: Duration[] = [35, 40, 60, 90, 120];
 const STUDENT_GRADES: StudentGrade[] = ['小低（1-3年级）', '小高（4-6年级）', '初中', '高中', '中职', '高职', '大学本科'];
+const STUDENT_LEVELS: StudentLevel[] = ['基础', '中等', '进阶'];
+const EXEC_CONSTRAINT_OPTIONS = {
+  deviceType: ['无设备', '平板', '电脑'] as const,
+  softwareEnvironment: ['浏览器', 'Python环境', 'AI平台'] as const,
+  materialLevel: ['无材料', '简单材料（纸笔）', '需提前准备', '需购买'] as const,
+  prepTime: ['无准备', '课前5分钟', '课前30分钟'] as const,
+  spaceMode: ['个体', '小组', '全班'] as const,
+  managementLevel: ['低', '中', '高'] as const,
+  costLevel: [0, '低', '需预算'] as const,
+};
 
 // ─── 文件上传区 ───────────────────────────────────────────────
 
@@ -32,54 +50,43 @@ function FileUploadZone({ onExtracted }: { onExtracted: () => void }) {
   const [progress, setProgress] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const { updateContext } = useAppStore();
-
-  const simulateExtract = useCallback((name: string) => {
-    setFileName(name);
+  const processFile = useCallback(async (file: File) => {
+    setFileName(file.name);
     setUploadState('uploading');
     setProgress(0);
 
-    // 模拟上传进度
-    const uploadTimer = setInterval(() => {
-      setProgress(p => {
-        if (p >= 100) { clearInterval(uploadTimer); return 100; }
-        return p + 20;
-      });
-    }, 150);
+    try {
+      setProgress(15);
+      await new Promise((resolve) => setTimeout(resolve, 180));
+      setProgress(30);
 
-    setTimeout(() => {
+      const fileText = await parseTeachingFile(file);
+      if (!fileText.trim()) {
+        throw new Error('文件解析后为空，请检查文件内容');
+      }
+
       setUploadState('extracting');
+      setProgress(45);
+
+      const extracted = await extractContextByLLM(fileText);
+      setProgress(100);
+
+      updateContext(extracted);
+      setUploadState('done');
+      onExtracted();
+      toast.success('已从文件中提取课程信息，请逐项确认');
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : '文件解析失败';
+      toast.error(msg);
+      setUploadState('idle');
       setProgress(0);
-
-      // 模拟提取进度
-      const extractTimer = setInterval(() => {
-        setProgress(p => {
-          if (p >= 100) { clearInterval(extractTimer); return 100; }
-          return p + 15;
-        });
-      }, 120);
-
-      setTimeout(() => {
-        // 填充提取到的数据
-        updateContext({
-          topic: '人工智能三次浪潮',
-          coreQuestion: '为什么人工智能会经历多次低谷与复苏？',
-          concepts: ['专家系统', '算力', '数据规模', '神经网络', '深度学习'],
-          ability: '能分析技术发展与社会条件的相互关系，能评价当前 AI 发展趋势的可持续性',
-          competency: '信息技术学科核心素养 · 计算思维 · 数字化学习与创新',
-          duration: 40,
-          courseType: '概念建构' as CourseType,
-          studentGrade: '高中',
-        });
-        setUploadState('done');
-        onExtracted();
-        toast.success('已从文件中提取课程信息，请逐项确认');
-      }, 2200);
-    }, 1000);
+      setFileName('');
+    }
   }, [updateContext, onExtracted]);
 
   const handleFile = (file: File) => {
     if (!file) return;
-    simulateExtract(file.name);
+    void processFile(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -336,7 +343,6 @@ function ContextBlock({
 export default function Step1Context() {
   const { context, updateContext, lockBlock, setStep } = useAppStore();
   const [newConcept, setNewConcept] = useState('');
-  const [extracted, setExtracted] = useState(false);
 
   const allLocked = context.block1Locked && context.block2Locked && context.block3Locked;
 
@@ -385,7 +391,7 @@ export default function Step1Context() {
         </div>
 
         {/* 文件上传区 */}
-        <FileUploadZone onExtracted={() => setExtracted(true)} />
+        <FileUploadZone onExtracted={() => {}} />
 
         {/* 三块上下文 */}
         <div className="space-y-4">
@@ -563,6 +569,93 @@ export default function Step1Context() {
                       {g}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* 学生水平 */}
+              <div>
+                <label className="td-field-label">学生水平（可选）</label>
+                <div className="flex flex-wrap gap-2">
+                  {STUDENT_LEVELS.map((level) => (
+                    <button
+                      key={level}
+                      onClick={() => updateContext({ studentLevel: level })}
+                      className={`td-pill-btn text-xs ${context.studentLevel === level ? 'td-pill-btn-active' : 'td-pill-btn-inactive'}`}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                  {context.studentLevel && (
+                    <button
+                      onClick={() => updateContext({ studentLevel: null })}
+                      className="td-pill-btn td-pill-btn-inactive text-xs"
+                    >
+                      清除
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 执行约束 */}
+              <div>
+                <label className="td-field-label">执行约束（活动生成过滤）</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <p className="text-muted-foreground mb-1.5">设备类型</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {EXEC_CONSTRAINT_OPTIONS.deviceType.map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => updateContext({ executionConstraints: { ...context.executionConstraints, deviceType: item } })}
+                          className={`td-pill-btn text-xs ${context.executionConstraints.deviceType === item ? 'td-pill-btn-active' : 'td-pill-btn-inactive'}`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground mb-1.5">软件环境</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {EXEC_CONSTRAINT_OPTIONS.softwareEnvironment.map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => updateContext({ executionConstraints: { ...context.executionConstraints, softwareEnvironment: item } })}
+                          className={`td-pill-btn text-xs ${context.executionConstraints.softwareEnvironment === item ? 'td-pill-btn-active' : 'td-pill-btn-inactive'}`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground mb-1.5">空间结构</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {EXEC_CONSTRAINT_OPTIONS.spaceMode.map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => updateContext({ executionConstraints: { ...context.executionConstraints, spaceMode: item } })}
+                          className={`td-pill-btn text-xs ${context.executionConstraints.spaceMode === item ? 'td-pill-btn-active' : 'td-pill-btn-inactive'}`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground mb-1.5">管理复杂度</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {EXEC_CONSTRAINT_OPTIONS.managementLevel.map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => updateContext({ executionConstraints: { ...context.executionConstraints, managementLevel: item } })}
+                          className={`td-pill-btn text-xs ${context.executionConstraints.managementLevel === item ? 'td-pill-btn-active' : 'td-pill-btn-inactive'}`}
+                        >
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

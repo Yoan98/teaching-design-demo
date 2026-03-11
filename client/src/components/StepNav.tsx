@@ -4,6 +4,7 @@
 
 import { Check } from 'lucide-react';
 import { useAppStore, type Step } from '@/lib/store';
+import AISettingsDialog from '@/components/AISettingsDialog';
 
 const STEPS: { id: Step; label: string }[] = [
   { id: 1, label: '课程上下文' },
@@ -83,9 +84,12 @@ export default function StepNav() {
           </div>
 
           {/* 步骤计数 */}
-          <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
-            {currentStep} / 5
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {currentStep} / 5
+            </span>
+            <AISettingsDialog />
+          </div>
         </div>
       </div>
     </header>

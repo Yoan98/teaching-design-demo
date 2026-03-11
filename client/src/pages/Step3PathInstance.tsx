@@ -17,15 +17,13 @@ import { toast } from 'sonner';
 import { nanoid } from 'nanoid';
 import {
   useAppStore, getTotalTime, getNodeTypeColor, getLogicRelationColor,
-  type Node, type LogicRelation
+  type Node
 } from '@/lib/store';
 
 const NODE_TYPES = [
   '概念理解', '比较分析', '实验探究', '因果推断', '综合讨论',
   '抽象总结', '迁移应用', '问题建构', '变量控制', '解释推理', '实验操作'
 ];
-
-const LOGIC_RELATIONS: LogicRelation[] = ['建立', '对比', '推翻', '应用'];
 
 // 时间分配状态条
 function TimeBar({ used, total }: { used: number; total: number }) {
@@ -63,11 +61,12 @@ function TimeBar({ used, total }: { used: number; total: number }) {
 }
 
 // 节点卡片
-function NodeCard({ node, stageId, index, total }: {
+function NodeCard({ node, stageId, index, total, logicRelations }: {
   node: Node;
   stageId: string;
   index: number;
   total: number;
+  logicRelations: string[];
 }) {
   const { updateNode, deleteNode, moveNode } = useAppStore();
   const { panelState, openPanel } = useAiPanel();
@@ -107,7 +106,7 @@ function NodeCard({ node, stageId, index, total }: {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
       className={`
-        relative bg-white rounded-xl border transition-all duration-200 overflow-hidden
+        relative bg-white rounded-xl border transition-all duration-200 overflow-visible
         ${editing
           ? 'border-primary/50 shadow-md'
           : 'border-border/70 hover:border-primary/25 hover:shadow-sm'
@@ -160,13 +159,13 @@ function NodeCard({ node, stageId, index, total }: {
                     {editing ? (
                       <Select
                         value={node.logicRelation}
-                        onValueChange={(v) => updateNode(node.nodeId, { logicRelation: v as LogicRelation })}
+                        onValueChange={(v) => updateNode(node.nodeId, { logicRelation: v })}
                       >
                         <SelectTrigger className="h-6 text-xs w-20 border-border/60">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {LOGIC_RELATIONS.map(r => (
+                          {logicRelations.map(r => (
                             <SelectItem key={r} value={r} className="text-xs">{r}</SelectItem>
                           ))}
                         </SelectContent>
@@ -267,7 +266,7 @@ function NodeCard({ node, stageId, index, total }: {
                       initial={{ opacity: 0, scale: 0.95, y: -4 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                      className="absolute right-0 top-8 bg-white border border-border rounded-xl shadow-lg z-20 w-32 py-1.5 overflow-hidden"
+                      className="absolute right-0 top-8 bg-white border border-border rounded-xl shadow-lg z-50 w-32 py-1.5 overflow-hidden"
                     >
                       {index > 0 && (
                         <button
@@ -312,6 +311,7 @@ function NodeCard({ node, stageId, index, total }: {
 
 export default function Step3PathInstance() {
   const { pathInstance, selectedModel, context, addNode, setStep } = useAppStore();
+  const logicRelations = selectedModel?.logicRelationSet || ['建立', '对比', '推翻', '应用'];
   const [activeStageId, setActiveStageId] = useState<string>(
     pathInstance.stages[0]?.stageId || ''
   );
@@ -427,6 +427,7 @@ export default function Step3PathInstance() {
                         stageId={stage.stageId}
                         index={nodeIdx}
                         total={stage.nodes.length}
+                        logicRelations={logicRelations}
                       />
                     ))}
                   </AnimatePresence>
